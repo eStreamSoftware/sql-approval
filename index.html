@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<!-- Required Meta Tags -->
+		<meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+		<meta content="IE=edge" http-equiv="X-UA-Compatible" />
+		<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+		<script defer src="alpinejs@3.11.1.js"></script>
+		<script src="tailwindcss@3.2.4.js"></script>
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+		/>
+		<title>Approval</title>
+	</head>
+
+	<script>
+		tailwind.config = {
+			theme: {
+				extend: {
+					fontFamily: {
+						sans: ["Poppins", "sans-serif"],
+					},
+				},
+			},
+		};
+		const host = "https://api-sql-approval.changsheng12.xyz";
+		const state = new URLSearchParams(window.location.hash.substring(1)).get("state");
+		const id_token = new URLSearchParams(window.location.hash.substring(1)).get("id_token");
+
+		function fetchApproval() {
+			fetch(`${host}/api/v1/approvals/${state}`, {
+				headers: { Authorization: `Bearer ${id_token}` },
+			})
+				.then((response) => {
+					this.email = response.headers.get("x-user");
+					if (response.status === 401) {
+						this.isLoading = false;
+						this.isAuthorized = false;
+						throw new Error("unauthorized user " + this.email);
+					} else if (response.status === 403) {
+						redirectToLogin();
+					} else if (response.status === 404) {
+						this.isLoading = false;
+						this.isNotFound = true;
+						throw new Error("invalid or expired id " + state);
+					} else if (response.ok) {
+						return response.json();
+					}
+				})
+				.then((json) => {
+					this.approval = json;
+					this.existingApprovalStatus = this.approval?.status?.find((s) => s.approvedBy === this.email);
+					this.isAuthorized = true;
+					this.isLoading = false;
+				})
+				.catch((err) => {
+					console.log(err);
+				});
+		}
+
+		// @param {boolean} shouldApprove required to approve or reject the approval
+		// @param {string} email required to identify who is approving the approval
+		// @param {string} reply optional to add a reply to the approval
+		function UpdateStatus(shouldApprove, email, reply) {
+			const body = JSON.stringify({
+				isApproved: shouldApprove,
+				approvedBy: email,
+				message: reply,
+			});
+			fetch(`${host}/api/v1/approvals/${state}/status`, {
+				method: "POST",
+				headers: { Authorization: `Bearer ${id_token}` },
+				body: body,
+			})
+				.then((response) => {
+					if (response.ok) {
+						location.reload();
+					} else if (response.status === 403) {
+						redirectToLogin();
+					}
+				})
+				.catch((err) => {
+					console.log(err);
+				});
+		}
+
+		function redirectToLogin() {
+			window.location.href = `${host}/approvals/${state}`;
+		}
+
+		function GetScreenshotData() {
+			return "data:image/png;base64," + this.approval.screenshot;
+		}
+
+		function CamelToNormalCase(string) {
+			return string.replace(/([A-Z])/g, " $1").replace(/^./, function (str) {
+				return str.toUpperCase();
+			});
+		}
+	</script>
+
+	<body
+		class="h-screen md:bg-gray-50 h-screen"
+		id="root"
+		x-data="{ approval: {}, existingApprovalStatus: {}, email: '', isLoading: true, isAuthorized: false, isNotFound: false }"
+		x-init="fetchApproval"
+	>
+		<!-- NavBar start -->
+		<div class="bg-white relative w-full px-4 py-3 lg:px-12 shadow-md">
+			<div class="container-fluid">
+				<div class="container-fluid flex flex flex-wrap items-center justify-between">
+					<h5 class="font-medium leading-tight mt-0 tracking-wide">Override Approval</h5>
+					<svg class="content-end" viewBox="0 0 500 150" width="70px" xmlns="http://www.w3.org/2000/svg">
+						<g data-name="Layer 2">
+							<g data-name="Layer 1" fill="rgba(128,0,128, 0.6)">
+								<path
+									d="M320.39 26v82.64h71.26V134h-99.17V26zM273.63 113.34l-10.12 21.23-11.43-8.15c-1.29.94-5.18 4.41-10.24 5.61a75.26 75.26 0 0 1-18.25 2.41h-56.08c-11.3 0-19.78-.13-28.61-8.54-8.25-7.88-7.79-30.31-7.79-38.18v-18.4c0-8.82.46-26.7 10-35.53 8.13-7.61 25-7.74 29.68-7.76h51c11.9 0 20.13.79 30 8.67 10 8.27 10.83 21.36 10.83 36.58v21.37c0 5.06-.48 5.33-.83 8a31.2 31.2 0 0 1-1.17 4.27Zm-80.45-24.69 12.13-21L233 86.25V65.69c0-4.68-1-8.16-3.89-11.09s-6.6-3.07-10.95-3.07h-38.88c-2.47 0-8.59-.41-12.13 2.26-4.47 3.34-5.18 8.69-5.17 15v21.5c0 5.21-.11 9.87 2.95 13.89 2.12 2.67 9 4.53 11.78 4.53h41.58a11.84 11.84 0 0 0 2.95-.26c1.17-.27 2-1.07 3.16-1.6ZM74.1 111.13c3.53 0 6.47-.27 9.3-2.41 2.12-1.73 2.48-3.47 2.48-5.89v-2.52a9 9 0 0 0-3.66-6.81c-2-1.34-6.12-1.34-10-1.47L30.75 91c-9.19 0-18.25-1.33-23.08-6.14C.36 77.78 0 67.23 0 63.88v-5.33c.11-10.15 1.64-21 10.24-26.72 7.77-5.06 16-5.75 32.27-5.75h29.68c10.6 0 28.39 2.27 33.34 12.14 2.83 5.48 3.65 9.62 3.65 16v6.27H82.45v-4.1a6 6 0 0 0-2.36-5c-1.53-1.33-3.3-1.6-5.42-1.6H37.81c-2.72 0-4.71-.28-6.83 1.6a8.48 8.48 0 0 0-3.3 6.61v2a8.47 8.47 0 0 0 2.24 6.28c1.77 1.6 3.65 1.46 5.89 1.46l46.64.52c8 .14 16.14 1.47 20.26 4.4 7.42 5.21 9.29 15.63 9.29 25.64v4.94c0 6.81.12 13.88-6.11 21.63C98 135 78.7 134.1 74.23 134.1H32.18c-9.31 0-18.72-1.32-23.56-5-5.31-4-7.78-11.22-7.78-16.3V98.87h27.09v3.08c0 2.54.24 4.41 1.53 6.28 1.76 2.94 4.72 2.94 7.9 2.94Z"
+								></path>
+								<path
+									d="M506.87 142.51C446.18 142.23 421 0 325.2 0h-34.69c95.78 0 121 142.23 181.66 142.51 5.5 0 5.24.06.25.06h34.69c-4.99.02 5.25-.03-.24-.06z"
+								></path>
+							</g>
+						</g>
+					</svg>
+				</div>
+			</div>
+		</div>
+		<!-- NavBar end -->
+		<div x-show="!isLoading">
+			<!-- Authorized User -->
+			<div x-show="approval && isAuthorized">
+				<!-- Approval Details Container -->
+				<div class="container h-[calc(100vh-45px)] mx-auto md:flex md:items-center">
+					<section class="text-gray-800 lg:text-left">
+						<div class="p-4 md:py-0 lg:py-12 md:px-12 grid gap-2 lg:grid-cols-2 lg:gap-12 flex items-center">
+							<!-- company name header -->
+							<div class="text-center">
+								<h1 class="text-xl lg:text-5xl font-semibold tracking-tight leading-tight lg:mb-6">
+									<span
+										class="tracking-wide text-gradient-to-r from-blue-500 text-indigo-500"
+										x-text="approval.company"
+									>
+									</span>
+									<br />
+									<span class="mt-4 hidden md:block">Request for Override Approval</span>
+								</h1>
+							</div>
+							<!-- company name header End -->
+
+							<!-- approval info form -->
+							<div class="lg:mb-0 rounded-lg py-3 md:p-12 md:shadow-lg md:bg-white" x-data="{reply:''}">
+								<!-- show if this user already approved/rejected before -->
+								<template
+									class="place-content-center place-self-center px-6 my-5 md:my-10"
+									x-if="existingApprovalStatus"
+								>
+									<div>
+										<div x-show="existingApprovalStatus.isApproved">
+											<div class="text-xl text-center lg:text-3xl font-semibold">Approved</div>
+											<div class="text-gray-400 text-center mb-6">This request has obtained your approval.</div>
+											<div class="flex place-content-center">
+												<svg width="150px" height="150px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150">
+													<defs>
+														<style>
+															.success-icon-1 {
+																fill: #0fbb7c;
+															}
+														</style>
+													</defs>
+													<title>Success</title>
+													<path
+														class="success-icon-1"
+														d="M0,75.49a75,75,0,1,1,75,75A75,75,0,0,1,0,75.49ZM108.89,62.55a8.21,8.21,0,0,0-11.6-11.61l-31.7,31.7-13-13A8.21,8.21,0,0,0,41,81.3l18.75,18.75a8.23,8.23,0,0,0,11.6,0Z"
+													/>
+												</svg>
+											</div>
+										</div>
+										<div x-show="!existingApprovalStatus.isApproved">
+											<div class="text-xl text-center lg:text-3xl font-semibold">Rejected</div>
+											<div class="text-gray-400 text-center mb-6">This request has obtained your rejection.</div>
+											<div class="flex place-content-center">
+												<svg width="150px" height="150px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150">
+													<defs>
+														<style>
+															.failed-icon-1 {
+																fill: #dc3545;
+															}
+														</style>
+													</defs>
+													<title>failed</title>
+													<path
+														class="failed-icon-1"
+														d="M0,75a75,75,0,1,1,75,75A75,75,0,0,1,0,75ZM51.27,61l13.8,13.77-13.8,14a6.77,6.77,0,0,0,0,9.7,6.36,6.36,0,0,0,9.7,0L74.74,84.93l14,13.54a6.86,6.86,0,1,0,9.7-9.7l-13.54-14L98.47,61a6.36,6.36,0,0,0,0-9.7,6.77,6.77,0,0,0-9.7,0l-14,13.8L61,51.27a6.86,6.86,0,0,0-9.7,9.7Z"
+													/>
+												</svg>
+											</div>
+										</div>
+										<hr class="m-4" />
+										<table class="min-w-full">
+											<tbody>
+												<tr>
+													<td class="text-sm text-gray-900 font-medium px-6">Email</td>
+													<td class="text-sm text-gray-900 px-6 py-2" x-text="existingApprovalStatus.approvedBy"></td>
+												</tr>
+												<tr>
+													<td class="text-sm text-gray-900 font-medium px-6">Approval Time</td>
+													<td
+														class="text-sm text-gray-900 px-6 py-2"
+														x-text="new Date(existingApprovalStatus.timestamp*1000).toString()"
+													></td>
+												</tr>
+												<tr>
+													<td class="text-sm text-gray-900 font-medium px-6">Reply</td>
+													<td
+														class="text-sm text-gray-900 px-6 py-2 whitespace-pre-line"
+														x-text="existingApprovalStatus.message"
+													></td>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+								</template>
+
+								<!-- show if this user never approve or reject this request before -->
+								<!-- approval details -->
+								<template class="grid gap-4" x-if="!existingApprovalStatus">
+									<span>
+										<details class="p-2 rounded-lg cursor-pointer" open x-show="approval?.message">
+											<summary class="text-sm leading-6 text-slate-600 font-semibold select-none">Message</summary>
+											<div class="mt-2 text-sm leading-6 text-slate-900">
+												<p class="whitespace-pre-line" x-text="approval.message"></p>
+											</div>
+										</details>
+										<details class="p-2 rounded-lg cursor-pointer" x-show="approval?.docDetails ?? false">
+											<summary class="text-sm leading-6 text-slate-600 font-semibold select-none">Doc Details</summary>
+											<div
+												class="flex flex-col overflow-x-auto sm:-mx-6 lg:-mx-8 text-sm leading-6 text-slate-600 inline-block min-w-full sm:px-6 lg:px-8 overflow-hidden"
+											>
+												<table class="min-w-full">
+													<tbody>
+														<template x-for="d in approval?.docDetails ? Object.entries(approval?.docDetails): []">
+															<tr class="border-b">
+																<td
+																	class="text-sm text-gray-900 font-medium px-6 whitespace-nowrap"
+																	x-text="CamelToNormalCase(d[0])+':'"
+																></td>
+																<td class="text-sm text-gray-900 px-6 py-2 whitespace-nowrap" x-text="d[1]"></td>
+															</tr>
+														</template>
+													</tbody>
+												</table>
+											</div>
+										</details>
+
+										<details class="p-2 rounded-lg cursor-pointer" x-show="approval?.screenshot">
+											<summary class="text-sm leading-6 text-slate-600 font-semibold select-none">Screenshot</summary>
+											<div class="flex flex-wrap justify-center">
+												<img :src="GetScreenshotData" alt="Screenshot" class="mt-2 max-w-full h-auto" />
+											</div>
+										</details>
+										<div class="px-2">
+											<label
+												for="replyTextarea"
+												class="form-label text-sm leading-6 text-slate-600 font-semibold select-none"
+												>Reply</label
+											>
+											<textarea
+												class="mt-2 form-control block w-full px-3 py-1.5 text-sm font-normal text-gray-700 bg-white bg-clip-padding rounded transition ease-in-out m-0 focus:text-gray-700 focus:bg-white focus:border-indigo-600 focus:outline-none bg-gray-50 drop-shadow-md placeholder: placeholder:font-light"
+												id="replyTextarea"
+												rows="3"
+												placeholder="Your message"
+												x-model="reply"
+											></textarea>
+										</div>
+										<div class="p-2 m-2 flex space-x-4">
+											<button
+												@click="() => UpdateStatus(true, email, reply)"
+												class="w-full inline-block lg:block lg:w-1/2 rounded shadow-md px-5 py-3 text-sm font-medium text-white bg-gradient-to-r from-green-400 to-emerald-500 hover:shadow-lg"
+												id="approve-btn"
+												type="submit"
+											>
+												Approve
+											</button>
+											<button
+												@click="() => UpdateStatus(false, email, reply)"
+												class="w-full inline-block lg:block lg:w-1/2 rounded shadow-md px-5 py-3 text-sm font-medium text-white bg-gradient-to-r from-red-400 to-rose-500 hover:shadow-lg"
+												id="reject-btn"
+												type="submit"
+											>
+												Reject
+											</button>
+										</div>
+									</span>
+								</template>
+							</div>
+							<!-- approval info form End -->
+						</div>
+					</section>
+				</div>
+				<!-- Approval Details Container End -->
+			</div>
+			<!-- Authorized User End -->
+
+			<!-- Unauthorized User 401 -->
+			<div class="flex items-center justify-center text-center container-fluid" x-show="!isAuthorized && !isNotFound">
+				<div class="p-10">
+					<h1 class="text-3xl font-medium">Unauthorized Access</h1>
+					<h1 class="text-lg text-slate-500">You do not have permission to access this page.</h1>
+					<h4 class="mt-4">Currently login as: <br /><mark class="bg-red-100" x-text="email"></mark></h4>
+					<button
+						type="button"
+						class="inline-block px-6 py-2.5 mt-3 bg-blue-600 text-white font-medium text-xs leading-tight uppercase rounded shadow-md"
+						@click="redirectToLogin"
+					>
+						Switch Account
+					</button>
+				</div>
+			</div>
+			<!-- Unauthorized User End -->
+
+			<!-- Invalid or Expired approval 404 -->
+			<template x-if="isNotFound">
+				<div class="flex items-center justify-center text-center container-fluid">
+					<div class="p-10">
+						<h1 class="text-3xl font-medium">Expired</h1>
+						<h1 class="text-lg text-slate-500">
+							This request is invalid or expired. Please request a new URL from client.
+						</h1>
+						<h4 class="mt-4">Currently login as: <br /><mark class="bg-red-100" x-text="email"></mark></h4>
+					</div>
+				</div>
+			</template>
+			<!-- Invalid or Expired approval End -->
+		</div>
+
+		<!-- Loading spinner -->
+		<div
+			class="flex justify-center items-center h-screen fixed top-0 left-0 right-0 bottom-0 w-full z-50 overflow-hidden"
+			x-show="isLoading"
+		>
+			<div class="spinner-border animate-spin inline-block w-8 h-8 rounded-full" role="status">
+				<span class="visually-hidden">
+					<svg
+						class="animate-spin -inline-block w-8 h-8 border-4 rounded-full"
+						fill="none"
+						viewBox="0 0 24 24"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+						<path
+							class="opacity-75"
+							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							fill="currentColor"
+						></path>
+					</svg>
+				</span>
+			</div>
+		</div>
+		<!-- Loading spinner End -->
+	</body>
+</html>
