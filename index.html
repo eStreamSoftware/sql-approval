@@ -24,12 +24,12 @@
 				},
 			},
 		};
-		const host = "https://api-sql-approval.changsheng12.xyz";
+		const endpoint = `/sql-approval/v1`;
 		const state = new URLSearchParams(window.location.hash.substring(1)).get("state");
 		const id_token = new URLSearchParams(window.location.hash.substring(1)).get("id_token");
 
 		function fetchApproval() {
-			fetch(`${host}/api/v1/approvals/${state}`, {
+			fetch(`${endpoint}/approvals/${state}`, {
 				headers: { Authorization: `Bearer ${id_token}` },
 			})
 				.then((response) => {
@@ -68,16 +68,16 @@
 				approvedBy: email,
 				message: reply,
 			});
-			fetch(`${host}/api/v1/approvals/${state}/status`, {
+			fetch(`${endpoint}/approvals/${state}/status`, {
 				method: "POST",
 				headers: { Authorization: `Bearer ${id_token}` },
 				body: body,
 			})
 				.then((response) => {
-					if (response.ok) {
-						location.reload();
-					} else if (response.status === 403) {
+					if (response.status === 403) {
 						redirectToLogin();
+					} else {
+						location.reload();
 					}
 				})
 				.catch((err) => {
@@ -86,7 +86,7 @@
 		}
 
 		function redirectToLogin() {
-			window.location.href = `${host}/approvals/${state}`;
+			window.location.href = `${endpoint}/login/google?id=${state}`;
 		}
 
 		function GetScreenshotData() {
