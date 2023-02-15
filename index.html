@@ -239,13 +239,13 @@
 											>
 												<table class="min-w-full">
 													<tbody>
-														<template x-for="d in approval?.docDetails ? Object.entries(approval?.docDetails): []">
+														<template x-for="d in approval?.docDetails">
 															<tr class="border-b">
 																<td
 																	class="text-sm text-gray-900 font-medium px-6 whitespace-nowrap"
-																	x-text="CamelToNormalCase(d[0])+':'"
+																	x-text="d.name+':'"
 																></td>
-																<td class="text-sm text-gray-900 px-6 py-2 whitespace-nowrap" x-text="d[1]"></td>
+																<td class="text-sm text-gray-900 px-6 py-2 whitespace-nowrap" x-text="d.value"></td>
 															</tr>
 														</template>
 													</tbody>
