@@ -89,6 +89,10 @@
 			window.location.href = `${endpoint}/login/google?id=${state}`;
 		}
 
+		function redirectToLoginWithSelectAccount() {
+			window.location.href = `${endpoint}/login/google?id=${state}&prompt=select_account`;
+		}
+
 		function GetScreenshotData() {
 			return "data:image/png;base64," + this.approval.screenshot;
 		}
@@ -308,7 +312,7 @@
 					<button
 						type="button"
 						class="inline-block px-6 py-2.5 mt-3 bg-blue-600 text-white font-medium text-xs leading-tight uppercase rounded shadow-md"
-						@click="redirectToLogin"
+						@click="redirectToLoginWithSelectAccount"
 					>
 						Switch Account
 					</button>
