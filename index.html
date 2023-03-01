@@ -24,6 +24,19 @@
 				},
 			},
 		};
+
+		const initialState = {
+			approval: {},
+			existingApprovalResponse: {},
+			currentOpenID: "",
+			isLoading: true,
+			isAuthorized: false,
+			isNotFound: false,
+			removeExistingResponse: function () {
+				this.existingApprovalResponse = null;
+			},
+		};
+
 		const endpoint = `/sql-approval/v1`;
 		const state = new URLSearchParams(window.location.hash.substring(1)).get("state");
 		const id_token = new URLSearchParams(window.location.hash.substring(1)).get("id_token");
@@ -33,11 +46,11 @@
 				headers: { Authorization: `Bearer ${id_token}` },
 			})
 				.then((response) => {
-					this.email = response.headers.get("x-user");
+					this.currentOpenID = response.headers.get("x-user");
 					if (response.status === 401) {
 						this.isLoading = false;
 						this.isAuthorized = false;
-						throw new Error("unauthorized user " + this.email);
+						throw new Error("unauthorized user " + this.currentOpenID);
 					} else if (response.status === 403) {
 						redirectToLogin();
 					} else if (response.status === 404) {
@@ -50,9 +63,12 @@
 				})
 				.then((json) => {
 					this.approval = json;
-					this.existingApprovalStatus = this.approval?.status?.find((s) => s.approvedBy === this.email);
+					this.existingApprovalResponse = this.approval?.responses?.find((r) => r.openID === this.currentOpenID);
 					this.isAuthorized = true;
 					this.isLoading = false;
+					if (!this.existingApprovalResponse) {
+						UpdateStatus("seen", this.currentOpenID, "", false);
+					}
 				})
 				.catch((err) => {
 					console.log(err);
@@ -62,13 +78,14 @@
 		// @param {boolean} shouldApprove required to approve or reject the approval
 		// @param {string} email required to identify who is approving the approval
 		// @param {string} reply optional to add a reply to the approval
-		function UpdateStatus(shouldApprove, email, reply) {
+		// @param {bool} shouldReload optional to reload the page after the approval is submitted
+		function UpdateStatus(status, openID, reply, shouldReload) {
 			const body = JSON.stringify({
-				isApproved: shouldApprove,
-				approvedBy: email,
+				status: status,
+				openID: openID,
 				message: reply,
 			});
-			fetch(`${endpoint}/approvals/${state}/status`, {
+			fetch(`${endpoint}/approvals/${state}/response`, {
 				method: "POST",
 				headers: { Authorization: `Bearer ${id_token}` },
 				body: body,
@@ -77,7 +94,9 @@
 					if (response.status === 403) {
 						redirectToLogin();
 					} else {
-						location.reload();
+						if (shouldReload) {
+							location.reload();
+						}
 					}
 				})
 				.catch((err) => {
@@ -104,12 +123,7 @@
 		}
 	</script>
 
-	<body
-		class="h-screen md:bg-gray-50 h-screen"
-		id="root"
-		x-data="{ approval: {}, existingApprovalStatus: {}, email: '', isLoading: true, isAuthorized: false, isNotFound: false }"
-		x-init="fetchApproval"
-	>
+	<body class="h-screen md:bg-gray-50 h-screen" id="root" x-data="initialState" x-init="fetchApproval">
 		<!-- NavBar start -->
 		<div class="bg-white relative w-full px-4 py-3 lg:px-12 shadow-md">
 			<div class="container-fluid">
@@ -157,12 +171,12 @@
 								<!-- show if this user already approved/rejected before -->
 								<template
 									class="place-content-center place-self-center px-6 my-5 md:my-10"
-									x-if="existingApprovalStatus"
+									x-if="existingApprovalResponse?.status === 'approved' || existingApprovalResponse?.status === 'rejected'"
 								>
 									<div>
-										<div x-show="existingApprovalStatus.isApproved">
+										<div x-show="existingApprovalResponse.status === 'approved'">
 											<div class="text-xl text-center lg:text-3xl font-semibold">Approved</div>
-											<div class="text-gray-400 text-center mb-6">This request has obtained your approval.</div>
+											<div class="text-gray-400 text-center mb-6">This request has been approved.</div>
 											<div class="flex place-content-center">
 												<svg width="150px" height="150px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150">
 													<defs>
@@ -180,9 +194,9 @@
 												</svg>
 											</div>
 										</div>
-										<div x-show="!existingApprovalStatus.isApproved">
+										<div x-show="existingApprovalResponse.status === 'rejected'">
 											<div class="text-xl text-center lg:text-3xl font-semibold">Rejected</div>
-											<div class="text-gray-400 text-center mb-6">This request has obtained your rejection.</div>
+											<div class="text-gray-400 text-center mb-6">This request has been rejected.</div>
 											<div class="flex place-content-center">
 												<svg width="150px" height="150px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150">
 													<defs>
@@ -205,30 +219,44 @@
 											<tbody>
 												<tr>
 													<td class="text-sm text-gray-900 font-medium px-6">Email</td>
-													<td class="text-sm text-gray-900 px-6 py-2" x-text="existingApprovalStatus.approvedBy"></td>
+													<td class="text-sm text-gray-900 px-6 py-2" x-text="existingApprovalResponse.openID"></td>
 												</tr>
 												<tr>
 													<td class="text-sm text-gray-900 font-medium px-6">Approval Time</td>
 													<td
 														class="text-sm text-gray-900 px-6 py-2"
-														x-text="new Date(existingApprovalStatus.timestamp*1000).toString()"
+														x-text="new Date(existingApprovalResponse.timestamp*1000).toString()"
 													></td>
 												</tr>
-												<tr>
+												<tr x-show="existingApprovalResponse.message">
 													<td class="text-sm text-gray-900 font-medium px-6">Reply</td>
 													<td
 														class="text-sm text-gray-900 px-6 py-2 whitespace-pre-line"
-														x-text="existingApprovalStatus.message"
+														x-text="existingApprovalResponse.message"
 													></td>
 												</tr>
 											</tbody>
 										</table>
+										<br />
+										<div class="flex place-content-center">
+											<button
+												@click="() => removeExistingResponse()"
+												class="w-full inline-block lg:block lg:w-1/2 rounded shadow-md px-5 py-3 text-sm font-medium text-white bg-gradient-to-r from-green-400 to-emerald-500 hover:shadow-lg"
+												id="approve-btn"
+												type="submit"
+											>
+												Update
+											</button>
+										</div>
 									</div>
 								</template>
 
 								<!-- show if this user never approve or reject this request before -->
 								<!-- approval details -->
-								<template class="grid gap-4" x-if="!existingApprovalStatus">
+								<template
+									class="grid gap-4"
+									x-if="!existingApprovalResponse || existingApprovalResponse.status === 'seen'"
+								>
 									<span>
 										<details class="p-2 rounded-lg cursor-pointer" open x-show="approval?.message">
 											<summary class="text-sm leading-6 text-slate-600 font-semibold select-none">Message</summary>
@@ -276,7 +304,7 @@
 										</div>
 										<div class="p-2 m-2 flex space-x-4">
 											<button
-												@click="() => UpdateStatus(true, email, reply)"
+												@click="() => UpdateStatus('approved', currentOpenID, reply, true)"
 												class="w-full inline-block lg:block lg:w-1/2 rounded shadow-md px-5 py-3 text-sm font-medium text-white bg-gradient-to-r from-green-400 to-emerald-500 hover:shadow-lg"
 												id="approve-btn"
 												type="submit"
@@ -284,7 +312,7 @@
 												Approve
 											</button>
 											<button
-												@click="() => UpdateStatus(false, email, reply)"
+												@click="() => UpdateStatus('rejected', currentOpenID, reply, true)"
 												class="w-full inline-block lg:block lg:w-1/2 rounded shadow-md px-5 py-3 text-sm font-medium text-white bg-gradient-to-r from-red-400 to-rose-500 hover:shadow-lg"
 												id="reject-btn"
 												type="submit"
@@ -308,7 +336,7 @@
 				<div class="p-10">
 					<h1 class="text-3xl font-medium">Unauthorized Access</h1>
 					<h1 class="text-lg text-slate-500">You do not have permission to access this page.</h1>
-					<h4 class="mt-4">Currently login as: <br /><mark class="bg-red-100" x-text="email"></mark></h4>
+					<h4 class="mt-4">Currently login as: <br /><mark class="bg-red-100" x-text="currentOpenID"></mark></h4>
 					<button
 						type="button"
 						class="inline-block px-6 py-2.5 mt-3 bg-blue-600 text-white font-medium text-xs leading-tight uppercase rounded shadow-md"
@@ -328,7 +356,6 @@
 						<h1 class="text-lg text-slate-500">
 							This request is invalid or expired. Please request a new URL from client.
 						</h1>
-						<h4 class="mt-4">Currently login as: <br /><mark class="bg-red-100" x-text="email"></mark></h4>
 					</div>
 				</div>
 			</template>
